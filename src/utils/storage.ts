@@ -1,4 +1,4 @@
-import { ColumnConfig, ProductionOrder } from '../types';
+import { ColumnConfig, ProductionOrder, ProductionReport } from '../types';
 
 export const DEFAULT_COLUMNS: ColumnConfig[] = [
   {
@@ -88,31 +88,48 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     title: 'Hydraulventilblock HVB-420',
     articleNumber: 'ART-99201',
     customer: 'Nordic Hydraulic AB',
-    batchSize: 12,
+    batchSize: 100, // Order: 100st
     unit: 'st',
     priority: 'high',
-    columnId: 'col-planerat',
+    columnId: 'col-montering',
     targetDate: '2026-10-02',
     drawingNumber: 'RIT-4421-C',
     createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-    operator: 'Mikael B',
+    updatedAt: new Date(Date.now() - 3600000 * 1).toISOString(),
+    operator: 'Kalle.K',
     tags: ['CNC-fräst', 'Härdat stål'],
     qrPayload: 'AO-2026-101',
+    stationProgress: {
+      'col-material': 100,
+      'col-montering': 30, // 30 st klara i montering
+    },
+    reports: [
+      {
+        id: 'rep_1',
+        timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
+        stationId: 'col-montering',
+        stationName: 'Montering',
+        operator: 'Kalle.K',
+        quantity: 30,
+        totalSoFar: 30,
+        orderTotal: 100,
+        note: 'Första delbatch monterad och verifierad mot mall.',
+      },
+    ],
     notes: [
       {
         id: 'n1',
-        timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-        operator: 'Mikael B',
-        text: 'Produktionsorder upplagd. Ritning RIT-4421-C granskad och godkänd.',
-        type: 'info',
-        stageName: 'Planerat',
+        timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
+        operator: 'Kalle.K',
+        text: 'Rapporterat Antal: 30 st. Totalt: 30 st av Order: 100 st.',
+        type: 'approved',
+        stageName: 'Montering',
       },
     ],
     checklists: {
-      'col-planerat': [
-        { id: 'c1', text: 'Ritningsunderlag verifierat', completed: true, completedBy: 'Mikael B' },
-        { id: 'c2', text: 'Råmaterial reserverat i lager', completed: true, completedBy: 'Mikael B' },
+      'col-montering': [
+        { id: 'c1', text: 'Spindellager injusterat', completed: true, completedBy: 'Kalle.K' },
+        { id: 'c2', text: 'Momentdragning 140 Nm', completed: true, completedBy: 'Kalle.K' },
       ],
     },
   },
@@ -121,8 +138,8 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     title: 'Stativram Robotcell R-28',
     articleNumber: 'ART-88140',
     customer: 'ABB Automation',
-    batchSize: 2,
-    unit: 'satser',
+    batchSize: 50,
+    unit: 'st',
     priority: 'normal',
     columnId: 'col-planerat',
     targetDate: '2026-10-05',
@@ -132,6 +149,8 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     operator: 'Sara L',
     tags: ['Svetskonstruktion', 'Målning RAL7016'],
     qrPayload: 'AO-2026-102',
+    stationProgress: {},
+    reports: [],
     notes: [
       {
         id: 'n2',
@@ -157,14 +176,30 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     drawingNumber: 'EL-700-REV3',
     createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    operator: 'Peter K',
+    operator: 'Anna.P',
     tags: ['Express', 'Känslig elektronik'],
     qrPayload: 'AO-2026-098',
+    stationProgress: {
+      'col-material': 40,
+    },
+    reports: [
+      {
+        id: 'rep_2',
+        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+        stationId: 'col-material',
+        stationName: 'Material uttaget',
+        operator: 'Anna.P',
+        quantity: 40,
+        totalSoFar: 40,
+        orderTotal: 40,
+        note: 'Komponentplock färdigt i kitting-vagn 4.',
+      },
+    ],
     notes: [
       {
         id: 'n3',
-        timestamp: new Date(Date.now() - 3600000 * 12).toISOString(),
-        operator: 'Lager / Anna',
+        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+        operator: 'Anna.P',
         text: 'Komponentplock färdigt i kitting-vagn 4. Kapslingar och kablage kompletta.',
         type: 'approved',
         stageName: 'Material uttaget',
@@ -172,50 +207,8 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     ],
     checklists: {
       'col-material': [
-        { id: 'c3', text: 'Kretskort verifierade mot stycklista', completed: true, completedBy: 'Anna M' },
-        { id: 'c4', text: 'Kapsling och displayer utplockade', completed: true, completedBy: 'Anna M' },
-      ],
-    },
-  },
-  {
-    id: 'AO-2026-095',
-    title: 'Kuggväxelhus KV-160',
-    articleNumber: 'ART-55310',
-    customer: 'Volvo GTO Skövde',
-    batchSize: 8,
-    unit: 'st',
-    priority: 'high',
-    columnId: 'col-montering',
-    targetDate: '2026-09-29',
-    drawingNumber: 'M-160-04',
-    createdAt: new Date(Date.now() - 3600000 * 72).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-    operator: 'Johan E',
-    tags: ['Lagerpassning', 'Tätning'],
-    qrPayload: 'AO-2026-095',
-    notes: [
-      {
-        id: 'n4',
-        timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
-        operator: 'Johan E',
-        text: 'Lager monterade med induktionsvärmare. Axlar injusterade till rätt axialspel.',
-        type: 'info',
-        stageName: 'Montering',
-      },
-      {
-        id: 'n5',
-        timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
-        operator: 'Johan E',
-        text: 'Varning: Momentnyckel kalibrerad, dragmoment 145 Nm applicerat på alla bultar.',
-        type: 'approved',
-        stageName: 'Montering',
-      },
-    ],
-    checklists: {
-      'col-montering': [
-        { id: 'cm1', text: 'Lager monterade med rätt presspassning', completed: true, completedBy: 'Johan E' },
-        { id: 'cm2', text: 'Tätningsringar insmorda och centrerade', completed: true, completedBy: 'Johan E' },
-        { id: 'cm3', text: 'Momentdragning utförd och märkt med färgpenna', completed: true, completedBy: 'Johan E' },
+        { id: 'c3', text: 'Kretskort verifierade mot stycklista', completed: true, completedBy: 'Anna.P' },
+        { id: 'c4', text: 'Kapsling och displayer utplockade', completed: true, completedBy: 'Anna.P' },
       ],
     },
   },
@@ -224,7 +217,7 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     title: 'Provtrycksmodul PM-300 Bar',
     articleNumber: 'ART-77211',
     customer: 'Parker Hannifin',
-    batchSize: 4,
+    batchSize: 20,
     unit: 'st',
     priority: 'normal',
     columnId: 'col-test',
@@ -232,23 +225,40 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     drawingNumber: 'HYD-300-TEST',
     createdAt: new Date(Date.now() - 3600000 * 96).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-    operator: 'Emma S',
+    operator: 'Emma.S',
     tags: ['Klass 1 provtryck', 'Olja ISO VG 46'],
     qrPayload: 'AO-2026-092',
+    stationProgress: {
+      'col-material': 20,
+      'col-montering': 20,
+      'col-test': 10,
+    },
+    reports: [
+      {
+        id: 'rep_3',
+        timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
+        stationId: 'col-test',
+        stationName: 'Test',
+        operator: 'Emma.S',
+        quantity: 10,
+        totalSoFar: 10,
+        orderTotal: 20,
+        note: '10 st provtryckta till 350 bar utan tryckfall.',
+      },
+    ],
     notes: [
       {
         id: 'n6',
         timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
-        operator: 'Emma S',
-        text: 'Enhet 1 och 2 provtryckta till 350 bar i 15 minuter utan tryckfall. Enhet 3 och 4 under provning.',
+        operator: 'Emma.S',
+        text: '10 av 20 st enheter provtryckta till 350 bar.',
         type: 'approved',
         stageName: 'Test',
       },
     ],
     checklists: {
       'col-test': [
-        { id: 'ct1', text: 'Täthetsprovning 350 bar utförd', completed: true, completedBy: 'Emma S' },
-        { id: 'ct2', text: 'Flödesmätning loggad i testsystem', completed: false },
+        { id: 'ct1', text: 'Täthetsprovning 350 bar utförd', completed: true, completedBy: 'Emma.S' },
       ],
     },
   },
@@ -265,32 +275,34 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     drawingNumber: 'KAB-C4-2026',
     createdAt: new Date(Date.now() - 3600000 * 120).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    operator: 'David N',
+    operator: 'David.N',
     tags: ['Märkt Deutsch-kontakt', 'Krympslang'],
     qrPayload: 'AO-2026-089',
+    stationProgress: {
+      'col-material': 15,
+      'col-montering': 15,
+      'col-test': 15,
+      'col-packning': 15,
+    },
+    reports: [],
     notes: [
       {
         id: 'n7',
         timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
-        operator: 'David N',
-        text: 'Testprotokoll och följesedel bifogade i kartong. Antistatpåsar förseglade.',
+        operator: 'David.N',
+        text: 'Testprotokoll och följesedel bifogade i kartong.',
         type: 'info',
         stageName: 'Packning',
       },
     ],
-    checklists: {
-      'col-packning': [
-        { id: 'cp1', text: 'Följesedel och testintyg ilagt', completed: true, completedBy: 'David N' },
-        { id: 'cp2', text: 'Kollimärkning med streckkod klistrad', completed: true, completedBy: 'David N' },
-      ],
-    },
+    checklists: {},
   },
   {
     id: 'AO-2026-084',
     title: 'Ventilblock VB-12 Aluminium',
     articleNumber: 'ART-99120',
     customer: 'Valmet Power',
-    batchSize: 50,
+    batchSize: 100,
     unit: 'st',
     priority: 'normal',
     columnId: 'col-leverans',
@@ -298,30 +310,34 @@ export const INITIAL_ORDERS: ProductionOrder[] = [
     drawingNumber: 'AL-12-08',
     createdAt: new Date(Date.now() - 3600000 * 150).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 7).toISOString(),
-    operator: 'Lager / Håkan',
+    operator: 'Håkan.L',
     tags: ['EU-pall', 'Plastad'],
     qrPayload: 'AO-2026-084',
+    stationProgress: {
+      'col-material': 100,
+      'col-montering': 100,
+      'col-test': 100,
+      'col-packning': 100,
+      'col-leverans': 100,
+    },
+    reports: [],
     notes: [
       {
         id: 'n8',
         timestamp: new Date(Date.now() - 3600000 * 7).toISOString(),
-        operator: 'Lager / Håkan',
-        text: 'Placerad på pallplats G-12. Väntar på DHL upphämtning kl 14:00.',
+        operator: 'Håkan.L',
+        text: 'Placerad på pallplats G-12. Klar för upphämtning.',
         type: 'approved',
         stageName: 'Klar för leverans',
       },
     ],
-    checklists: {
-      'col-leverans': [
-        { id: 'cl1', text: 'Pall plastad och märkt med fraktetikett', completed: true, completedBy: 'Håkan' },
-      ],
-    },
+    checklists: {},
   },
 ];
 
 const STORAGE_KEYS = {
-  ORDERS: 'planeringstavla_orders_v1',
-  COLUMNS: 'planeringstavla_columns_v1',
+  ORDERS: 'planeringstavla_orders_v2',
+  COLUMNS: 'planeringstavla_columns_v2',
   OPERATOR_NAME: 'planeringstavla_operator_name',
   LAST_SYNC: 'planeringstavla_last_sync',
 };
@@ -344,7 +360,15 @@ export function loadStoredOrders(): ProductionOrder[] {
       saveStoredOrders(INITIAL_ORDERS);
       return INITIAL_ORDERS;
     }
-    return JSON.parse(data);
+    const parsed: ProductionOrder[] = JSON.parse(data);
+    // Ensure all fields exist
+    return parsed.map((o) => ({
+      ...o,
+      reports: o.reports || [],
+      stationProgress: o.stationProgress || {},
+      checklists: o.checklists || {},
+      notes: o.notes || [],
+    }));
   } catch (e) {
     console.error('Failed to parse orders:', e);
     return INITIAL_ORDERS;
@@ -391,8 +415,8 @@ export function saveStoredColumns(columns: ColumnConfig[], notify = true) {
 }
 
 export function getStoredOperatorName(): string {
-  if (typeof window === 'undefined') return '';
-  return localStorage.getItem(STORAGE_KEYS.OPERATOR_NAME) || '';
+  if (typeof window === 'undefined') return 'Kalle.K';
+  return localStorage.getItem(STORAGE_KEYS.OPERATOR_NAME) || 'Kalle.K';
 }
 
 export function setStoredOperatorName(name: string) {

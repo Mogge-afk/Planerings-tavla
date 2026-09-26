@@ -22,49 +22,91 @@ export async function generateQRCodeDataUrl(
 }
 
 /**
- * Parses scanned text from QR or barcode.
- * Handles formats like:
- * - "AO-2026-101"
- * - "PLANERING_AO:AO-2026-101"
- * - "https://.../?order=AO-2026-101"
- * - JSON string with { id: "AO-2026-101" }
+ * Creates a QR payload that binds BOTH the Order/Product AND a specific Station.
+ * Example: "AO-2026-101@col-montering"
  */
-export function extractOrderIdFromScan(scannedText: string): string {
-  const trimmed = scannedText.trim();
-  if (!trimmed) return '';
+export function formatStationQRPayload(orderId: string, stationId: string): string {
+  return `${orderId.trim()}@${stationId.trim()}`;
+}
 
-  // Check JSON format
+export interface DecodedScan {
+  orderId: string;
+  stationId?: string;
+}
+
+/**
+ * Parses scanned text from QR or barcode.
+ * Handles:
+ * - "AO-2026-101@col-montering"
+ * - "PLANERING:AO-2026-101:col-montering"
+ * - JSON: { "orderId": "AO-2026-101", "stationId": "col-montering" }
+ * - URL: "https://.../?order=AO-2026-101&station=col-montering"
+ * - Raw Order ID: "AO-2026-101"
+ */
+export function extractScanPayload(scannedText: string): DecodedScan {
+  const trimmed = scannedText.trim();
+  if (!trimmed) return { orderId: '' };
+
+  // 1. Check JSON format
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     try {
       const parsed = JSON.parse(trimmed);
-      if (parsed.id) return String(parsed.id);
-      if (parsed.orderId) return String(parsed.orderId);
+      const orderId = String(parsed.orderId || parsed.id || '');
+      const stationId = parsed.stationId || parsed.station ? String(parsed.stationId || parsed.station) : undefined;
+      if (orderId) return { orderId, stationId };
     } catch {
-      // not json, continue
+      // not json
     }
   }
 
-  // Check prefix PLANERING_AO:
-  if (trimmed.startsWith('PLANERING_AO:')) {
-    return trimmed.replace('PLANERING_AO:', '').trim();
-  }
-
-  // Check URL query param ?order= or /order/
+  // 2. Check URL with query params
   try {
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       const url = new URL(trimmed);
       const orderParam = url.searchParams.get('order') || url.searchParams.get('id');
-      if (orderParam) return orderParam.trim();
-      const pathParts = url.pathname.split('/').filter(Boolean);
-      const lastPart = pathParts[pathParts.length - 1];
-      if (lastPart && (lastPart.startsWith('AO-') || lastPart.startsWith('ORD-'))) {
-        return lastPart.trim();
+      const stationParam = url.searchParams.get('station') || url.searchParams.get('step');
+      if (orderParam) {
+        return {
+          orderId: orderParam.trim(),
+          stationId: stationParam ? stationParam.trim() : undefined,
+        };
       }
     }
   } catch {
     // not url
   }
 
-  // Direct ID
-  return trimmed;
+  // 3. Check @ format: "AO-2026-101@col-montering"
+  if (trimmed.includes('@')) {
+    const [orderPart, stationPart] = trimmed.split('@');
+    if (orderPart.trim()) {
+      return {
+        orderId: orderPart.trim(),
+        stationId: stationPart?.trim() || undefined,
+      };
+    }
+  }
+
+  // 4. Check PLANERING: format
+  if (trimmed.startsWith('PLANERING:')) {
+    const parts = trimmed.split(':');
+    if (parts.length >= 3) {
+      return {
+        orderId: parts[1].trim(),
+        stationId: parts[2].trim(),
+      };
+    } else if (parts.length === 2) {
+      return {
+        orderId: parts[1].trim(),
+      };
+    }
+  }
+
+  // 5. Fallback: single Order ID
+  return { orderId: trimmed };
+}
+
+// Keep backward-compatible helper
+export function extractOrderIdFromScan(scannedText: string): string {
+  return extractScanPayload(scannedText).orderId;
 }

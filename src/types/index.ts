@@ -9,6 +9,18 @@ export interface ProductionNote {
   stageName?: string;
 }
 
+export interface ProductionReport {
+  id: string;
+  timestamp: string;
+  stationId: string;
+  stationName: string;
+  operator: string; // t.ex. "Kalle.K"
+  quantity: number; // t.ex. 30 st
+  totalSoFar: number; // t.ex. 30 st
+  orderTotal: number; // t.ex. 100 st
+  note?: string;
+}
+
 export interface ChecklistItem {
   id: string;
   text: string;
@@ -22,19 +34,21 @@ export interface ProductionOrder {
   title: string; // Produktnamn t.ex. "Ventilblock VB-40 Hydraulik"
   articleNumber: string; // t.ex. "ART-8910"
   customer: string; // t.ex. "Hydraulik Nord AB"
-  batchSize: number; // t.ex. 25
+  batchSize: number; // Order: t.ex. 100 st
   unit: string; // t.ex. "st", "satser", "enheter"
   priority: Priority;
-  columnId: string;
+  columnId: string; // Nuvarande aktiv station
   targetDate: string; // YYYY-MM-DD
   createdAt: string;
   updatedAt: string;
-  operator?: string;
+  operator?: string; // Senaste operatör t.ex. "Kalle.K"
   notes: ProductionNote[];
+  reports: ProductionReport[]; // Logg över alla rapporter (Namn, Antal, Totalt, Order)
+  stationProgress: Record<string, number>; // stationId -> ackumulerat antal klart vid den stationen
   checklists: Record<string, ChecklistItem[]>;
   tags: string[];
-  qrPayload: string;
-  drawingNumber?: string; // Ritningsnummer
+  qrPayload?: string;
+  drawingNumber?: string;
 }
 
 export interface ColumnConfig {

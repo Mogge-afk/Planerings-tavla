@@ -5,10 +5,9 @@ import {
   ChevronRight, 
   MessageSquare, 
   AlertTriangle, 
-  CheckCircle2, 
-  Clock, 
   User, 
-  CheckSquare
+  CheckSquare,
+  TrendingUp
 } from 'lucide-react';
 import { ProductionOrder } from '../types';
 
@@ -39,8 +38,13 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   const totalNotes = order.notes.length;
   
   // Calculate checklist progress for this specific column
-  const currentChecklist = order.checklists[order.columnId] || [];
+  const currentChecklist = order.checklists?.[order.columnId] || [];
   const completedChecklistCount = currentChecklist.filter((c) => c.completed).length;
+
+  // Station progress (e.g. 30 st out of 100 st)
+  const stationCompletedQty = order.stationProgress?.[order.columnId] || 0;
+  const orderTotal = order.batchSize || 100;
+  const percentDone = Math.min(100, Math.round((stationCompletedQty / orderTotal) * 100));
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', order.id);
@@ -52,11 +56,11 @@ export const OrderCard: React.FC<OrderCardProps> = ({
       draggable
       onDragStart={handleDragStart}
       onClick={onClick}
-      className={`group relative bg-white rounded-lg border-2 border-neutral-800 p-3 shadow-xs hover:shadow-md transition-all cursor-pointer select-none active:scale-[0.99] ${
+      className={`group relative bg-white rounded-lg border-2 border-neutral-900 p-3 shadow-xs hover:shadow-md transition-all cursor-pointer select-none active:scale-[0.99] ${
         isRecentlyUpdated ? 'ring-3 ring-emerald-500 ring-offset-2 animate-bounce-subtle' : ''
       }`}
     >
-      {/* Top Header: Order ID & Priority & Batch */}
+      {/* Top Header: Order ID & Priority & Order Total */}
       <div className="flex items-center justify-between gap-1 mb-1.5">
         <div className="flex items-center gap-1.5">
           <span className="font-mono text-xs font-black tracking-tight text-neutral-900 bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-300">
@@ -74,9 +78,9 @@ export const OrderCard: React.FC<OrderCardProps> = ({
           )}
         </div>
 
-        {/* Batch size */}
-        <div className="font-mono text-xs font-bold text-neutral-800 bg-neutral-50 px-1.5 py-0.5 rounded border border-neutral-200">
-          {order.batchSize} {order.unit}
+        {/* Total Order quantity (Order: 100 st) */}
+        <div className="font-mono text-xs font-black text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded border border-neutral-300" title="Total orderkvantitet">
+          Order: {orderTotal} {order.unit}
         </div>
       </div>
 
@@ -97,16 +101,32 @@ export const OrderCard: React.FC<OrderCardProps> = ({
         )}
       </div>
 
-      {/* Drawing / Tags */}
-      {order.drawingNumber && (
-        <div className="mt-1 text-[10px] text-neutral-600 font-mono flex items-center gap-1">
-          <span>Ritn:</span>
-          <span className="text-neutral-700">{order.drawingNumber}</span>
+      {/* Station Progress Bar (e.g. Antal 30 st Totalt 30 st / 100 st) */}
+      <div className="mt-2 pt-2 border-t border-neutral-100">
+        <div className="flex items-center justify-between text-[11px] mb-1">
+          <span className="text-neutral-500 font-medium">Här:</span>
+          <span className="font-mono font-bold text-neutral-900">
+            {stationCompletedQty > 0 ? (
+              <span className="text-emerald-800 font-black">
+                {stationCompletedQty} / {orderTotal} {order.unit} ({percentDone}%)
+              </span>
+            ) : (
+              <span className="text-neutral-400">Ej påbörjad (0/{orderTotal})</span>
+            )}
+          </span>
         </div>
-      )}
+        <div className="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+          <div
+            style={{ width: `${percentDone}%` }}
+            className={`h-full transition-all duration-300 ${
+              percentDone >= 100 ? 'bg-emerald-600' : percentDone > 0 ? 'bg-neutral-900' : 'bg-transparent'
+            }`}
+          />
+        </div>
+      </div>
 
-      {/* Meta indicators: Notes, Checklist, Deviations, Operator */}
-      <div className="mt-2.5 pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-600">
+      {/* Meta indicators: Deviations, Notes, Operator */}
+      <div className="mt-2 flex items-center justify-between text-[11px] text-neutral-600">
         <div className="flex items-center gap-2">
           {hasDeviations ? (
             <span className="flex items-center gap-0.5 text-rose-700 font-bold bg-rose-50 px-1 py-0.5 rounded border border-rose-200">
@@ -114,7 +134,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
               Avvikelse
             </span>
           ) : totalNotes > 0 ? (
-            <span className="flex items-center gap-0.5 text-neutral-600 hover:text-neutral-900">
+            <span className="flex items-center gap-0.5 text-neutral-600">
               <MessageSquare className="w-3 h-3 text-neutral-500" />
               {totalNotes}
             </span>
@@ -128,8 +148,8 @@ export const OrderCard: React.FC<OrderCardProps> = ({
           )}
 
           {order.operator && (
-            <span className="flex items-center gap-1 text-neutral-600 truncate max-w-[85px]" title={order.operator}>
-              <User className="w-2.5 h-2.5" />
+            <span className="flex items-center gap-1 font-semibold text-neutral-800 truncate max-w-[95px]" title={order.operator}>
+              <User className="w-2.5 h-2.5 text-neutral-500" />
               {order.operator}
             </span>
           )}
@@ -142,14 +162,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             e.stopPropagation();
             onQuickQR();
           }}
-          className="p-1 rounded text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition cursor-pointer"
-          title="Visa orderns QR-kod"
+          className="p-1 rounded text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100 transition cursor-pointer"
+          title="Visa orderns stations-QR"
         >
           <QrCode className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Card Quick-Move Arrows (Visible on hover or mobile tap) */}
+      {/* Card Quick-Move Arrows */}
       <div className="mt-2 flex items-center justify-between gap-1 pt-1 border-t border-dashed border-neutral-200">
         <button
           type="button"

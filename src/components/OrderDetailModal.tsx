@@ -2,23 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   QrCode, 
-  Calendar, 
-  Clock, 
   User, 
-  Building2, 
-  FileText, 
   Layers, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Plus, 
   Printer, 
   Download, 
-  Trash2,
-  Send,
-  CheckSquare
+  Trash2, 
+  Send, 
+  CheckSquare, 
+  CheckCircle2,
+  FileSpreadsheet
 } from 'lucide-react';
-import { ColumnConfig, ProductionOrder, ProductionNote, ChecklistItem } from '../types';
-import { generateQRCodeDataUrl } from '../utils/qr';
+import { ColumnConfig, ProductionOrder, ProductionNote, ProductionReport, ChecklistItem } from '../types';
+import { generateQRCodeDataUrl, formatStationQRPayload } from '../utils/qr';
 import { getStoredOperatorName, setStoredOperatorName } from '../utils/storage';
 
 interface OrderDetailModalProps {
@@ -40,6 +35,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onDeleteOrder,
   onPrintLabel,
 }) => {
+  const [selectedStationQR, setSelectedStationQR] = useState<string>('');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [newNoteText, setNewNoteText] = useState('');
   const [newNoteType, setNewNoteType] = useState<ProductionNote['type']>('info');
@@ -48,14 +44,24 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
   useEffect(() => {
     if (order) {
-      generateQRCodeDataUrl(order.qrPayload || order.id, { width: 300, margin: 2 }).then(setQrDataUrl);
-      setOperator(getStoredOperatorName() || order.operator || '');
+      const activeStation = selectedStationQR || order.columnId || columns[0]?.id || '';
+      setSelectedStationQR(activeStation);
+      setOperator(getStoredOperatorName() || order.operator || 'Kalle.K');
     }
-  }, [order]);
+  }, [order, isOpen, columns]);
+
+  // Update QR preview whenever selected station changes
+  useEffect(() => {
+    if (order && selectedStationQR) {
+      const payload = formatStationQRPayload(order.id, selectedStationQR);
+      generateQRCodeDataUrl(payload, { width: 300, margin: 2 }).then(setQrDataUrl);
+    }
+  }, [order, selectedStationQR]);
 
   if (!isOpen || !order) return null;
 
   const currentColumn = columns.find((c) => c.id === order.columnId);
+  const orderTotal = order.batchSize || 100;
 
   const handleStageChange = (newColId: string) => {
     if (newColId === order.columnId) return;
@@ -103,7 +109,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   };
 
   const handleToggleChecklist = (colId: string, itemId: string) => {
-    const currentList = order.checklists[colId] || [];
+    const currentList = order.checklists?.[colId] || [];
     const updatedList = currentList.map((item) =>
       item.id === itemId
         ? {
@@ -128,7 +134,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   const handleAddChecklist = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newChecklistText.trim()) return;
-    const currentList = order.checklists[order.columnId] || [];
+    const currentList = order.checklists?.[order.columnId] || [];
     const newItem: ChecklistItem = {
       id: 'chk_' + Date.now(),
       text: newChecklistText.trim(),
@@ -146,14 +152,14 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
     setNewChecklistText('');
   };
 
-  const currentChecklist = order.checklists[order.columnId] || [];
+  const currentChecklist = order.checklists?.[order.columnId] || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl border-2 border-neutral-800 shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl border-2 border-neutral-900 shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Top Header */}
-        <div className="px-6 py-4 border-b-2 border-neutral-800 bg-neutral-900 text-white flex items-center justify-between">
+        <div className="px-6 py-4 border-b-2 border-neutral-900 bg-neutral-950 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-mono text-base font-black px-2 py-0.5 rounded bg-white text-neutral-950">
               {order.id}
@@ -163,7 +169,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 {order.title}
               </h2>
               <p className="text-xs text-neutral-400">
-                Artikel: {order.articleNumber} · Kund: {order.customer}
+                Artikel: {order.articleNumber} · Kund: {order.customer} · Order: {orderTotal} {order.unit}
               </p>
             </div>
           </div>
@@ -172,10 +178,10 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             <button
               onClick={() => onPrintLabel(order)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold rounded-lg border border-neutral-700 transition cursor-pointer"
-              title="Skriv ut QR-följesedel för denna order"
+              title="Skriv ut följesedel med stations-QR"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Skriv ut etikett</span>
+              <span>Skriv ut följesedel</span>
             </button>
             <button
               onClick={onClose}
@@ -189,17 +195,18 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
         {/* Content Body */}
         <div className="p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
           
-          {/* Left 2 Cols: Details & Timeline */}
+          {/* Left 2 Cols: Details, Station Progress, Reports & Timeline */}
           <div className="lg:col-span-2 space-y-6">
             
             {/* Quick Status Selection */}
             <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200">
               <span className="text-xs font-bold text-neutral-600 uppercase tracking-wider block mb-2">
-                Produktionsfas (Klicka för att flytta):
+                Aktiv produktionsfas på tavlan:
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {columns.map((col) => {
                   const isActive = col.id === order.columnId;
+                  const done = order.stationProgress?.[col.id] || 0;
                   return (
                     <button
                       key={col.id}
@@ -217,32 +224,60 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                     >
                       {isActive && <CheckCircle2 className="w-3.5 h-3.5 text-neutral-900" />}
                       <span>{col.title}</span>
+                      <span className="font-mono text-[10px] text-neutral-500">
+                        ({done}/{orderTotal})
+                      </span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Production Specifications Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 bg-neutral-100/70 rounded-lg border border-neutral-200">
-                <span className="text-neutral-500 font-medium block">Antal / Batch</span>
-                <span className="font-mono text-base font-bold text-neutral-900">
-                  {order.batchSize} {order.unit}
+            {/* Inrapporterade delbatcher (Namn, Antal, Totalt, Order) */}
+            <div className="bg-white p-4 rounded-xl border-2 border-neutral-800">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-black uppercase tracking-wider text-neutral-900 flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  Inrapporterade batcher ({order.reports?.length || 0})
+                </span>
+                <span className="text-xs font-mono font-bold text-neutral-700">
+                  Order: {orderTotal} {order.unit}
                 </span>
               </div>
-              <div className="p-3 bg-neutral-100/70 rounded-lg border border-neutral-200">
-                <span className="text-neutral-500 font-medium block">Leveransmål</span>
-                <span className="font-mono text-sm font-bold text-neutral-900">
-                  {order.targetDate || 'Ej satt'}
-                </span>
-              </div>
-              <div className="p-3 bg-neutral-100/70 rounded-lg border border-neutral-200">
-                <span className="text-neutral-500 font-medium block">Ritningsnummer</span>
-                <span className="font-mono text-sm font-bold text-neutral-900">
-                  {order.drawingNumber || 'Standard'}
-                </span>
-              </div>
+
+              {order.reports && order.reports.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-300 text-neutral-500">
+                        <th className="py-1.5 font-bold">Station</th>
+                        <th className="py-1.5 font-bold">Operatör (Namn)</th>
+                        <th className="py-1.5 font-bold font-mono">Antal</th>
+                        <th className="py-1.5 font-bold font-mono">Totalt</th>
+                        <th className="py-1.5 font-bold">Tidpunkt</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200 font-medium text-neutral-800">
+                      {order.reports.map((rep) => (
+                        <tr key={rep.id} className="hover:bg-neutral-50">
+                          <td className="py-2 font-bold text-neutral-900">{rep.stationName}</td>
+                          <td className="py-2">{rep.operator}</td>
+                          <td className="py-2 font-mono font-bold text-emerald-700">+{rep.quantity} {order.unit}</td>
+                          <td className="py-2 font-mono">{rep.totalSoFar} / {rep.orderTotal} {order.unit}</td>
+                          <td className="py-2 text-neutral-500 font-mono text-[11px]">
+                            {new Date(rep.timestamp).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}{' '}
+                            {new Date(rep.timestamp).toLocaleDateString('sv-SE', { month: 'numeric', day: 'numeric' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-neutral-400 italic">
+                  Inga delrapporter registrerade ännu. Skanna stationens QR för att rapportera Namn, Antal och Totalt.
+                </p>
+              )}
             </div>
 
             {/* Checklist for Active Stage */}
@@ -259,7 +294,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
               <div className="space-y-2 mb-3">
                 {currentChecklist.length === 0 ? (
-                  <p className="text-xs text-neutral-400 italic">Inga specifika checklistpunkter inlagda för denna fas.</p>
+                  <p className="text-xs text-neutral-400 italic">Inga kontrollpunkter inlagda för denna fas.</p>
                 ) : (
                   currentChecklist.map((item) => (
                     <label
@@ -309,7 +344,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             {/* Complete Production Log / Timeline */}
             <div className="space-y-3">
               <span className="text-xs font-bold text-neutral-800 uppercase tracking-wider block">
-                Produktionslogg & Historik ({order.notes.length})
+                Fullständig historik ({order.notes.length})
               </span>
 
               {/* Add Note Form */}
@@ -363,13 +398,13 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                     type="text"
                     value={newNoteText}
                     onChange={(e) => setNewNoteText(e.target.value)}
-                    placeholder="Skriv notering från verkstaden..."
+                    placeholder="Skriv notering..."
                     className="flex-1 px-3 py-1.5 text-xs bg-white border border-neutral-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-neutral-900"
                   />
                   <button
                     type="submit"
                     disabled={!newNoteText.trim()}
-                    className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 text-white rounded-md text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                    className="px-3 py-1.5 bg-neutral-950 hover:bg-neutral-800 disabled:opacity-50 text-white rounded-md text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                   >
                     <Send className="w-3 h-3" />
                     <span>Spara</span>
@@ -378,7 +413,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               </form>
 
               {/* Timeline Items */}
-              <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                 {order.notes.map((note) => (
                   <div
                     key={note.id}
@@ -414,33 +449,51 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Right Col: Dedicated QR Code & Physical Tag Preview */}
+          {/* Right Col: Stationsbunden QR-kod */}
           <div className="space-y-4">
-            <div className="bg-neutral-50 p-4 rounded-xl border-2 border-neutral-800 text-center flex flex-col items-center">
-              <span className="text-xs font-black uppercase tracking-wider text-neutral-700 mb-2">
-                Orderns QR-kod
+            <div className="bg-neutral-50 p-4 rounded-xl border-2 border-neutral-900 text-center flex flex-col items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-neutral-700 mb-1">
+                Stationsbunden QR-kod
               </span>
 
+              {/* Station selector for QR preview */}
+              <div className="w-full mb-3">
+                <label className="text-[10px] text-neutral-500 font-bold block mb-1">
+                  Välj station att visa QR för:
+                </label>
+                <select
+                  value={selectedStationQR}
+                  onChange={(e) => setSelectedStationQR(e.target.value)}
+                  className="w-full text-xs font-bold px-2 py-1.5 bg-white border border-neutral-300 rounded-lg text-neutral-900"
+                >
+                  {columns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {qrDataUrl ? (
-                <div className="p-3 bg-white rounded-lg border border-neutral-300 shadow-xs mb-3">
-                  <img src={qrDataUrl} alt="Order QR" className="w-48 h-48 mx-auto" />
+                <div className="p-3 bg-white rounded-lg border border-neutral-300 shadow-xs mb-2">
+                  <img src={qrDataUrl} alt="Station QR" className="w-44 h-44 mx-auto" />
                 </div>
               ) : (
-                <div className="w-48 h-48 bg-neutral-200 rounded-lg animate-pulse mb-3" />
+                <div className="w-44 h-44 bg-neutral-200 rounded-lg animate-pulse mb-2" />
               )}
 
-              <div className="font-mono text-sm font-black text-neutral-900 mb-1">
-                {order.id}
+              <div className="font-mono text-xs font-black text-neutral-900 mb-1">
+                {order.id} @ {columns.find((c) => c.id === selectedStationQR)?.title}
               </div>
               <p className="text-[11px] text-neutral-500 leading-tight mb-3">
-                Skannas med mobilkamera eller handskanner vid varje station för att hämta & uppdatera status.
+                Skanna denna kod vid stationen för att öppna formuläret med Namn, Antal och Totalt.
               </p>
 
               <div className="flex flex-col w-full gap-2">
                 <button
                   type="button"
                   onClick={() => onPrintLabel(order)}
-                  className="w-full py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  className="w-full py-2 bg-neutral-950 hover:bg-neutral-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Skriv ut följesedel</span>
@@ -448,7 +501,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 {qrDataUrl && (
                   <a
                     href={qrDataUrl}
-                    download={`QR_${order.id}.png`}
+                    download={`QR_${order.id}_${selectedStationQR}.png`}
                     className="w-full py-1.5 bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition"
                   >
                     <Download className="w-3.5 h-3.5" />
@@ -459,7 +512,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             </div>
 
             {/* Danger Zone: Delete Order */}
-            <div className="pt-4 border-t border-neutral-200">
+            <div className="pt-2 border-t border-neutral-200">
               <button
                 type="button"
                 onClick={() => {

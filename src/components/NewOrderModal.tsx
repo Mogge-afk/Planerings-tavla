@@ -71,6 +71,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       updatedAt: new Date().toISOString(),
       operator,
       notes: initialNotes,
+      reports: [],
+      stationProgress: {},
       checklists: {},
       tags: [],
       qrPayload: orderId.trim().toUpperCase(),

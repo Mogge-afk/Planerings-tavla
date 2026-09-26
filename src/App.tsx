@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ColumnConfig, ProductionOrder, Priority, ProductionNote, ChecklistItem } from './types';
+import { ColumnConfig, ProductionOrder, Priority, ProductionNote, ProductionReport, ChecklistItem } from './types';
 import { 
   loadStoredOrders, 
   saveStoredOrders, 
@@ -32,6 +32,7 @@ export default function App() {
   // Modals state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannedOrder, setScannedOrder] = useState<ProductionOrder | null>(null);
+  const [scannedTargetStationId, setScannedTargetStationId] = useState<string | undefined>(undefined);
   const [isQuickUpdateOpen, setIsQuickUpdateOpen] = useState(false);
   
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
@@ -60,17 +61,19 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Check URL parameters for direct QR scan link (e.g. ?order=AO-2026-101)
+  // Check URL parameters for direct QR scan link (e.g. ?order=AO-2026-101&station=col-montering)
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const directOrderId = params.get('order') || params.get('scan') || params.get('id');
+      const directStationId = params.get('station') || params.get('step');
       if (directOrderId) {
         const found = orders.find(
           (o) => o.id.toLowerCase() === directOrderId.toLowerCase()
         );
         if (found) {
           setScannedOrder(found);
+          setScannedTargetStationId(directStationId || undefined);
           setIsQuickUpdateOpen(true);
         }
       }
@@ -87,7 +90,7 @@ export default function App() {
     }, 2500);
   };
 
-  // Move order between columns (drag & drop or button click)
+  // Move order between columns (drag & drop or arrow buttons)
   const handleMoveOrder = useCallback((orderId: string, targetColumnId: string) => {
     setOrders((prev) => {
       const targetCol = columns.find((c) => c.id === targetColumnId);
@@ -97,7 +100,7 @@ export default function App() {
           const newNote: ProductionNote = {
             id: 'n_' + Date.now(),
             timestamp: new Date().toISOString(),
-            operator: 'Operatör',
+            operator: ord.operator || 'Operatör',
             text: `Flyttad från "${fromCol?.title || 'Okänd'}" till "${targetCol?.title || 'Okänd'}".`,
             type: 'stage_change',
             stageName: targetCol?.title,
@@ -158,8 +161,8 @@ export default function App() {
     });
   };
 
-  // Handler when QR code is identified from scanner
-  const handleOrderIdentified = (orderId: string) => {
+  // Handler when QR code is scanned (with station binding!)
+  const handleOrderIdentified = (orderId: string, stationId?: string) => {
     setIsScannerOpen(false);
     const found = orders.find(
       (o) => o.id.toLowerCase() === orderId.toLowerCase()
@@ -167,53 +170,83 @@ export default function App() {
 
     if (found) {
       setScannedOrder(found);
+      setScannedTargetStationId(stationId);
       setIsQuickUpdateOpen(true);
     } else {
       alert(`Order "${orderId}" hittades inte bland aktiva tillverkningsordrar.`);
     }
   };
 
-  // Save status & notes from QR scan quick modal
-  const handleSaveQuickUpdate = (
+  // Save report from QuickUpdateModal (Namn, Antal, Totalt, Order)
+  const handleSaveReport = (
     orderId: string,
-    newColumnId: string,
-    noteText: string,
-    noteType: ProductionNote['type'],
+    stationId: string,
     operator: string,
-    updatedChecklists?: Record<string, ChecklistItem[]>
+    quantity: number,
+    totalSoFar: number,
+    moveNextStage: boolean,
+    targetNextColumnId?: string,
+    noteText?: string,
+    noteType?: ProductionNote['type']
   ) => {
-    const targetCol = columns.find((c) => c.id === newColumnId);
+    const stationObj = columns.find((c) => c.id === stationId);
+    const targetNextObj = targetNextColumnId ? columns.find((c) => c.id === targetNextColumnId) : null;
 
     setOrders((prev) => {
       const next = prev.map((ord) => {
         if (ord.id === orderId) {
           const notesCopy = [...ord.notes];
-          const isStageChanged = ord.columnId !== newColumnId;
+          const reportsCopy = [...(ord.reports || [])];
 
-          // If stage changed, log automatic movement note
-          if (isStageChanged) {
-            const oldCol = columns.find((c) => c.id === ord.columnId);
+          // 1. Add Production Report (Namn, Antal, Totalt, Order)
+          const newReport: ProductionReport = {
+            id: 'rep_' + Date.now(),
+            timestamp: new Date().toISOString(),
+            stationId,
+            stationName: stationObj?.title || 'Station',
+            operator,
+            quantity,
+            totalSoFar,
+            orderTotal: ord.batchSize,
+            note: noteText,
+          };
+          reportsCopy.unshift(newReport);
+
+          // 2. Add Activity Note
+          const activityText = `Rapporterat vid ${stationObj?.title}: Namn: ${operator}, Antal: ${quantity} ${ord.unit}. Totalt: ${totalSoFar} av Order: ${ord.batchSize} ${ord.unit}.${
+            noteText ? ` (${noteText})` : ''
+          }`;
+          notesCopy.unshift({
+            id: 'n_rep_' + Date.now(),
+            timestamp: new Date().toISOString(),
+            operator,
+            text: activityText,
+            type: noteType || 'approved',
+            stageName: stationObj?.title,
+          });
+
+          // 3. Update columnId if stage is advancing
+          let newColumnId = ord.columnId;
+          if (moveNextStage && targetNextColumnId && targetNextColumnId !== ord.columnId) {
+            newColumnId = targetNextColumnId;
             notesCopy.unshift({
-              id: 'n_stage_' + Date.now(),
+              id: 'n_adv_' + Date.now(),
               timestamp: new Date().toISOString(),
               operator,
-              text: `Status uppdaterad: Flyttad till ${targetCol?.title} (Tidigare: ${oldCol?.title})`,
+              text: `Ordern flyttad vidare till "${targetNextObj?.title}".`,
               type: 'stage_change',
-              stageName: targetCol?.title,
+              stageName: targetNextObj?.title,
             });
+          } else if (stationId !== ord.columnId) {
+            // Keep at this station if not already there
+            newColumnId = stationId;
           }
 
-          // If custom operator note entered, log it
-          if (noteText) {
-            notesCopy.unshift({
-              id: 'n_user_' + Date.now(),
-              timestamp: new Date().toISOString(),
-              operator,
-              text: noteText,
-              type: noteType,
-              stageName: targetCol?.title,
-            });
-          }
+          // 4. Update station progress
+          const updatedProgress = {
+            ...(ord.stationProgress || {}),
+            [stationId]: totalSoFar,
+          };
 
           return {
             ...ord,
@@ -221,7 +254,8 @@ export default function App() {
             operator,
             updatedAt: new Date().toISOString(),
             notes: notesCopy,
-            checklists: updatedChecklists || ord.checklists,
+            reports: reportsCopy,
+            stationProgress: updatedProgress,
           };
         }
         return ord;
@@ -235,43 +269,27 @@ export default function App() {
   };
 
   // Station check-in handler from tablet kiosk mode
-  const handleOrderStationCheckin = (
+  const handleOrderStationReport = (
     orderId: string,
-    targetColumnId: string,
-    noteText: string,
-    operator: string
+    stationId: string,
+    operator: string,
+    quantity: number,
+    totalSoFar: number,
+    moveNextStage: boolean,
+    targetNextColumnId?: string,
+    noteText?: string
   ) => {
-    const targetCol = columns.find((c) => c.id === targetColumnId);
-
-    setOrders((prev) => {
-      const next = prev.map((ord) => {
-        if (ord.id === orderId) {
-          const notesCopy = [...ord.notes];
-          notesCopy.unshift({
-            id: 'n_station_' + Date.now(),
-            timestamp: new Date().toISOString(),
-            operator,
-            text: noteText || `Incheckad på station ${targetCol?.title}`,
-            type: 'stage_change',
-            stageName: targetCol?.title,
-          });
-
-          return {
-            ...ord,
-            columnId: targetColumnId,
-            operator,
-            updatedAt: new Date().toISOString(),
-            notes: notesCopy,
-          };
-        }
-        return ord;
-      });
-
-      saveStoredOrders(next);
-      return next;
-    });
-
-    flashUpdatedCard(orderId);
+    handleSaveReport(
+      orderId,
+      stationId,
+      operator,
+      quantity,
+      totalSoFar,
+      moveNextStage,
+      targetNextColumnId,
+      noteText,
+      'approved'
+    );
   };
 
   // Save new customized columns
@@ -293,7 +311,6 @@ export default function App() {
   // Filtered orders for the board
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      // Search
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -303,7 +320,6 @@ export default function App() {
         order.articleNumber.toLowerCase().includes(q) ||
         (order.drawingNumber && order.drawingNumber.toLowerCase().includes(q));
 
-      // Priority
       const matchesPriority =
         selectedPriority === 'all' || order.priority === selectedPriority;
 
@@ -361,24 +377,26 @@ export default function App() {
         recentlyUpdatedOrderId={recentlyUpdatedOrderId}
       />
 
-      {/* MODAL 1: QR Code Scanner */}
+      {/* MODAL 1: QR Code Scanner (Extracts both Product and Station!) */}
       <QRScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onOrderIdentified={handleOrderIdentified}
         allOrders={orders}
+        columns={columns}
       />
 
-      {/* MODAL 2: Quick Status & Note Updater upon QR scan */}
+      {/* MODAL 2: Quick Status & Report (Namn: Kalle.K, Antal: 30 st, Totalt: 30, Order: 100st) */}
       <QuickUpdateModal
         isOpen={isQuickUpdateOpen}
         order={scannedOrder}
         columns={columns}
+        targetStationId={scannedTargetStationId}
         onClose={() => setIsQuickUpdateOpen(false)}
-        onSaveUpdate={handleSaveQuickUpdate}
+        onSaveReport={handleSaveReport}
       />
 
-      {/* MODAL 3: Order Detail Inspection & History */}
+      {/* MODAL 3: Order Detail Inspection, Reports Log & History */}
       <OrderDetailModal
         isOpen={isOrderDetailOpen}
         order={selectedOrder}
@@ -410,7 +428,7 @@ export default function App() {
         onSaveColumns={handleSaveColumns}
       />
 
-      {/* MODAL 6: Print Labels & Routing Sheets */}
+      {/* MODAL 6: Print Labels & Routing Sheets (With Station-bound QR Codes!) */}
       <PrintLabelsModal
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
@@ -425,7 +443,7 @@ export default function App() {
         onClose={() => setIsStationModeOpen(false)}
         columns={columns}
         allOrders={orders}
-        onOrderStationCheckin={handleOrderStationCheckin}
+        onOrderStationReport={handleOrderStationReport}
       />
     </div>
   );
