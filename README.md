@@ -4,6 +4,8 @@ En modern, digital planeringstavla för verkstäder och tillverkande industri. B
 
 Inspirerad av fysiska planeringstavlor med anpassningsbara kolumnrubriker, stations- och produktbundna QR-koder, följesedlar och realtidsinrapportering.
 
+https://mogge-afk.github.io/Planerings-tavla/
+
 ---
 
 ## 🚀 Funktioner
